@@ -1,0 +1,159 @@
+// Prisma schema for AI Job Application Coach.
+// Conventions (CLAUDE.md): uuid PKs via gen_random_uuid(), timestamptz created_at,
+// FKs ON DELETE CASCADE or SET NULL (never orphan rows). Usage limits per billing
+// month ("YYYY-MM"). See Claude Code Guide.md → Session 0.2.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----- Enums ----------------------------------------------------------------
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  BOOSTER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum CoverLetterTone {
+  PROFESSIONAL
+  FRIENDLY
+  CONCISE
+}
+
+enum Feature {
+  CV_OPTIMIZE
+  COVER_LETTER
+  ATS_CHECK
+  INTERVIEW
+}
+
+// ----- Models ---------------------------------------------------------------
+
+/// Mirrors a Supabase auth.users row. `id` is supplied by Supabase, not generated here.
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  language  String   @default("en")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  subscription Subscription?
+  cvDocuments  CvDocument[]
+  coverLetters CoverLetter[]
+  atsChecks    AtsCheck[]
+  usageRecords UsageRecord[]
+
+  @@index([email])
+}
+
+model Subscription {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String             @unique @db.Uuid
+  tier                 SubscriptionTier   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  paddleSubscriptionId String?            @unique
+  paddleCustomerId     String?
+  currentPeriodStart   DateTime?          @db.Timestamptz(6)
+  currentPeriodEnd     DateTime?          @db.Timestamptz(6)
+  canceledAt           DateTime?          @db.Timestamptz(6)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([paddleCustomerId])
+}
+
+model CvDocument {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String         @db.Uuid
+  originalFileName String
+  fileStoragePath  String? // Supabase storage path; null once the original file is purged
+  originalContent  String         @db.Text
+  targetJobTitle   String?
+  targetIndustry   String?
+  optimizedContent String?        @db.Text
+  status           DocumentStatus @default(UPLOADED)
+  errorMessage     String?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coverLetters CoverLetter[]
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model CoverLetter {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String          @db.Uuid
+  cvDocumentId     String?         @db.Uuid
+  companyName      String?
+  jobTitle         String
+  jobDescription   String          @db.Text
+  tone             CoverLetterTone @default(PROFESSIONAL)
+  generatedContent String          @db.Text
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(6)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvDocument CvDocument? @relation(fields: [cvDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([cvDocumentId])
+}
+
+model AtsCheck {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @db.Uuid
+  cvContent       String   @db.Text
+  jobDescription  String   @db.Text
+  score           Int // 0-100 (validated in app layer)
+  matchedKeywords String[]
+  missingKeywords String[]
+  suggestions     String   @db.Text // JSON array of { category, issue, fix }
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UsageRecord {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @db.Uuid
+  feature       Feature
+  billingPeriod String // "YYYY-MM" billing month
+  count         Int      @default(0)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature, billingPeriod])
+  @@index([userId])
+}
