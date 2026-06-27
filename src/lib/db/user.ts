@@ -34,3 +34,32 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 export async function updateUser(id: string, data: Prisma.UserUpdateInput): Promise<User> {
   return prisma.user.update({ where: { id }, data })
 }
+
+/**
+ * Ensure an app User row (and its FREE Subscription) exists for a verified
+ * Supabase auth user. Idempotent — safe to call on every authenticated access.
+ *
+ * Uses two sequential upserts rather than an interactive transaction so it
+ * behaves well over the Supabase transaction pooler (PgBouncer); both upserts
+ * are individually idempotent, so a retry converges to the same state.
+ */
+export async function ensureUserProvisioned(input: CreateUserInput): Promise<User> {
+  const user = await prisma.user.upsert({
+    where: { id: input.id },
+    update: { email: input.email },
+    create: {
+      id: input.id,
+      email: input.email,
+      name: input.name ?? null,
+      ...(input.language ? { language: input.language } : {}),
+    },
+  })
+
+  await prisma.subscription.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id, tier: 'FREE', status: 'ACTIVE' },
+  })
+
+  return user
+}
