@@ -1,15 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseClient } from '@/lib/auth/client'
-import { Button } from '@/components/ui/button'
 
-export function LogoutButton() {
+/** Sign the user out and send them to /login. */
+export function useLogout(): { logout: () => Promise<void>; loading: boolean } {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
-  async function logout(): Promise<void> {
+  const logout = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       await createSupabaseClient().auth.signOut()
@@ -18,11 +18,7 @@ export function LogoutButton() {
     } catch {
       setLoading(false)
     }
-  }
+  }, [router])
 
-  return (
-    <Button variant="outline" size="sm" onClick={logout} disabled={loading}>
-      {loading ? 'Logging out…' : 'Log out'}
-    </Button>
-  )
+  return { logout, loading }
 }

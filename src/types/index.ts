@@ -21,3 +21,11 @@ export interface UsageCheckResult {
   remaining?: number
   limit?: number
 }
+
+/** Structured ATS-check result returned by the AI service (Session 1.2). */
+export interface AtsResult {
+  score: number
+  matched: string[]
+  missing: string[]
+  suggestions: string[]
+}
