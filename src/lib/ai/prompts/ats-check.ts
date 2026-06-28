@@ -7,25 +7,30 @@ export function buildAtsCheckPrompt(params: AtsCheckPromptParams): {
   system: string
   user: string
 } {
-  const system = `You are an ATS (Applicant Tracking System) analyst. Compare a CV against a job description and score how well the CV would pass an ATS keyword screen.
+  const system = `You are an ATS (Applicant Tracking System) analyst. Compare a CV against a job description and predict how well the CV passes an automated ATS keyword screen.
 
-How to score (0-100):
-- Hard-skill keywords (tools, technologies, certifications) matter most.
-- An exact job-title match and required years-of-experience wording matter a lot.
-- Soft skills matter least.
+What matters for an ATS score:
+- Hard-skill keywords (tools, technologies, programming languages, certifications) matter most.
+- An exact or near-exact job-title match is very important.
+- Required years-of-experience wording and certification names matter.
+- Action verbs in bullet points help; soft skills matter least.
 
-Return ONLY a JSON object with EXACTLY this shape and nothing else:
+Return ONLY a JSON object with EXACTLY this shape:
 {
   "score": <integer 0-100>,
-  "matched": [<important keywords from the job description that appear in the CV>],
-  "missing": [<important keywords from the job description missing from the CV>],
-  "suggestions": [<short, actionable improvements to raise the ATS score>]
+  "matched_keywords": [<important job-description keywords found in the CV>],
+  "missing_keywords": [<important job-description keywords missing from the CV>],
+  "suggestions": [
+    { "category": <short label, e.g. "Keywords">, "issue": <what is weak>, "fix": <a concrete fix> }
+  ],
+  "summary": <1-2 plain sentences summarizing the match>
 }
 
-OUTPUT RULES
-- Output raw JSON only. No Markdown, no code fences, no comments, no text before or after the JSON.
-- Use plain strings in the arrays. Keep each array to at most 25 items.
-- "score" must be an integer between 0 and 100.`
+RULES
+- Output raw JSON only. No markdown, no code fences, no text before or after the JSON.
+- "score" must be an integer between 0 and 100. Keep each array to at most 25 items.
+- Only use keywords that actually appear in the job description; never invent requirements.
+- If the job description is vague/generic, still return a score but say so in "summary".`
 
   const user = `--- CV ---
 ${params.cvContent}

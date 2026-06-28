@@ -22,10 +22,18 @@ export interface UsageCheckResult {
   limit?: number
 }
 
-/** Structured ATS-check result returned by the AI service (Session 1.2). */
+/** One actionable ATS suggestion (Session 3.1). */
+export interface AtsSuggestion {
+  category: string
+  issue: string
+  fix: string
+}
+
+/** Structured ATS-check result returned by the AI service (Session 3.1). */
 export interface AtsResult {
   score: number
-  matched: string[]
-  missing: string[]
-  suggestions: string[]
+  matchedKeywords: string[]
+  missingKeywords: string[]
+  suggestions: AtsSuggestion[]
+  summary: string
 }

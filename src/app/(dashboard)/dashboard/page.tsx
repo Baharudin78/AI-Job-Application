@@ -1,21 +1,14 @@
 import Link from 'next/link'
-import {
-  FileText,
-  Mail,
-  ScanSearch,
-  Plus,
-  AlertCircle,
-  Clock,
-} from 'lucide-react'
-import type { Feature } from '@prisma/client'
+import { FileText, Mail, ScanSearch, Plus, AlertCircle, Clock } from 'lucide-react'
 
 import { requireAuth } from '@/lib/auth/server'
 import { getUserSubscription } from '@/lib/db/subscription'
-import { resolveEffectiveTier, getMonthlyUsage, TIER_LIMITS } from '@/lib/db/usage'
+import { resolveEffectiveTier, getUsageStats, serializeUsageStats, type UsageStatsDTO } from '@/lib/db/usage'
 import { getDashboardData, type DashboardData, type ActivityType } from '@/lib/db/dashboard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { UpgradeBanner } from '@/components/shared/UpgradeBanner'
+import { UsageMeter } from '@/components/shared/UsageMeter'
 
 const SUMMARY_CARDS = [
   { key: 'cvDocuments' as const, label: 'CVs optimized', href: '/cv', icon: FileText },
@@ -35,22 +28,22 @@ export default async function DashboardPage() {
   const tier = resolveEffectiveTier(subscription)
 
   let data: DashboardData
-  let usage: Record<Feature, number>
+  let usage: UsageStatsDTO
   try {
-    const [dashboardData, monthlyUsage] = await Promise.all([
+    const [dashboardData, usageStats] = await Promise.all([
       getDashboardData(user.id),
-      getMonthlyUsage(user.id),
+      getUsageStats(user.id),
     ])
     data = dashboardData
-    usage = monthlyUsage
+    usage = serializeUsageStats(usageStats)
   } catch (error) {
     console.error('[dashboard/page]', error)
     return <DashboardError />
   }
 
   const firstName = user.name?.trim().split(/\s+/)[0] ?? null
-  const cvLimit = TIER_LIMITS[tier].CV_OPTIMIZE
-  const cvRemaining = cvLimit === Infinity ? undefined : Math.max(0, cvLimit - usage.CV_OPTIMIZE)
+  const cv = usage.features.find((f) => f.feature === 'CV_OPTIMIZE')
+  const cvRemaining = cv && cv.limit !== null ? (cv.remaining ?? undefined) : undefined
 
   return (
     <div className="space-y-6">
@@ -58,7 +51,9 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight">
           Welcome back{firstName ? `, ${firstName}` : ''}
         </h1>
-        <p className="text-sm text-muted-foreground">Here&apos;s what&apos;s happening with your applications.</p>
+        <p className="text-sm text-muted-foreground">
+          Here&apos;s what&apos;s happening with your applications.
+        </p>
       </div>
 
       {tier === 'FREE' && (
@@ -109,33 +104,47 @@ export default async function DashboardPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recent activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.recentActivity.length === 0 ? (
-            <EmptyActivity />
-          ) : (
-            <ul className="divide-y">
-              {data.recentActivity.map((item) => {
-                const Icon = ACTIVITY_ICONS[item.type]
-                return (
-                  <li key={`${item.type}-${item.id}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                      <Icon className="size-4 text-muted-foreground" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Recent activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.recentActivity.length === 0 ? (
+              <EmptyActivity />
+            ) : (
+              <ul className="divide-y">
+                {data.recentActivity.map((item) => {
+                  const Icon = ACTIVITY_ICONS[item.type]
+                  return (
+                    <li
+                      key={`${item.type}-${item.id}`}
+                      className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <Icon className="size-4 text-muted-foreground" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">This month&apos;s usage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <UsageMeter features={usage.features} tier={usage.tier} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

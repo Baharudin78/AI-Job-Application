@@ -13,3 +13,8 @@ export function normalizeWhitespace(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
+
+/** Remove HTML tags from pasted content (e.g. a job description copied from a site). */
+export function stripHtml(text: string): string {
+  return text.replace(/<[^>]*>/g, ' ')
+}

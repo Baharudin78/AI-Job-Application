@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
 
 import type { AtsResult } from '@/types'
 import { anthropic, CLAUDE_MODEL, MAX_TOKENS } from './client'
@@ -13,6 +12,7 @@ import { sanitizeUserInput, withRetry } from './utils'
 import { buildCvOptimizePrompt, type CvOptimizePromptParams } from './prompts/cv-optimize'
 import { buildCoverLetterPrompt, type CoverLetterPromptParams } from './prompts/cover-letter'
 import { buildAtsCheckPrompt, type AtsCheckPromptParams } from './prompts/ats-check'
+import { parseAtsResponse } from './parsers/ats-response'
 
 interface ClaudeCallParams {
   system: string
@@ -94,55 +94,23 @@ export async function generateCoverLetter(params: CoverLetterPromptParams): Prom
 
 // ----- ATS check ------------------------------------------------------------
 
-const atsSchema = z.object({
-  score: z.number(),
-  matched: z.array(z.string()),
-  missing: z.array(z.string()),
-  suggestions: z.array(z.string()),
-})
-
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const candidate = fenced?.[1] ?? text
-  const start = candidate.indexOf('{')
-  const end = candidate.lastIndexOf('}')
-  return start >= 0 && end > start ? candidate.slice(start, end + 1) : candidate
-}
-
-function parseAtsResult(raw: string): AtsResult {
-  let data: unknown
-  try {
-    data = JSON.parse(extractJson(raw))
-  } catch (error) {
-    throw new AiInvalidResponseError('The ATS analysis was not valid JSON.', error)
-  }
-  const parsed = atsSchema.safeParse(data)
-  if (!parsed.success) {
-    throw new AiInvalidResponseError('The ATS analysis did not match the expected shape.')
-  }
-  return {
-    score: Math.max(0, Math.min(100, Math.round(parsed.data.score))),
-    matched: parsed.data.matched.slice(0, 50),
-    missing: parsed.data.missing.slice(0, 50),
-    suggestions: parsed.data.suggestions.slice(0, 50),
-  }
-}
-
 export async function checkAts(params: AtsCheckPromptParams): Promise<AtsResult> {
   const { system, user } = buildAtsCheckPrompt({
     cvContent: sanitizeUserInput(params.cvContent),
     jobDescription: sanitizeUserInput(params.jobDescription),
   })
 
-  const raw = await withRetry(() => callClaude({ system, user, maxTokens: MAX_TOKENS.ATS_CHECK, minLength: 10 }))
+  const raw = await withRetry(() =>
+    callClaude({ system, user, maxTokens: MAX_TOKENS.ATS_CHECK, minLength: 10 }),
+  )
   try {
-    return parseAtsResult(raw)
+    return parseAtsResponse(raw)
   } catch {
     // One stricter retry — JSON-only reminder.
     const strictUser = `${user}\n\nIMPORTANT: Respond with ONLY the raw JSON object. No code fences, no explanation.`
     const retryRaw = await withRetry(() =>
       callClaude({ system, user: strictUser, maxTokens: MAX_TOKENS.ATS_CHECK, minLength: 10 }),
     )
-    return parseAtsResult(retryRaw)
+    return parseAtsResponse(retryRaw)
   }
 }

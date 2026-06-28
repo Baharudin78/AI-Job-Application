@@ -2,31 +2,7 @@ import type { Feature, Subscription, SubscriptionTier, UsageRecord } from '@pris
 import type { UsageCheckResult } from '@/types'
 import { prisma } from './client'
 import { getUserSubscription } from './subscription'
-
-/**
- * Monthly limits per tier and feature. `Infinity` means unlimited.
- *
- * NOTE: Session 1.5 relocates this to `@/lib/payments/limits.ts` and hardens
- * `checkUsageLimit` to be transaction-atomic. For now it lives here so usage
- * logic is self-contained.
- */
-export const TIER_LIMITS: Record<SubscriptionTier, Record<Feature, number>> = {
-  FREE: { CV_OPTIMIZE: 3, COVER_LETTER: 3, ATS_CHECK: 5, INTERVIEW: 0 },
-  PRO: { CV_OPTIMIZE: Infinity, COVER_LETTER: Infinity, ATS_CHECK: Infinity, INTERVIEW: 10 },
-  BOOSTER: {
-    CV_OPTIMIZE: Infinity,
-    COVER_LETTER: Infinity,
-    ATS_CHECK: Infinity,
-    INTERVIEW: Infinity,
-  },
-}
-
-const FEATURE_LABELS: Record<Feature, string> = {
-  CV_OPTIMIZE: 'CV optimization',
-  COVER_LETTER: 'cover letter',
-  ATS_CHECK: 'ATS check',
-  INTERVIEW: 'interview practice',
-}
+import { ALL_FEATURES, FEATURE_LABELS, getTierLimit } from '@/lib/payments/limits'
 
 /**
  * Resolve the tier a user is effectively entitled to right now.
@@ -54,7 +30,7 @@ export function resolveEffectiveTier(subscription: Subscription | null): Subscri
 }
 
 function formatYearMonth(date: Date): string {
-  // UTC so the period is stable regardless of server/client timezone (avoids clock skew).
+  // UTC so the period is stable regardless of timezone (avoids clock skew).
   const year = date.getUTCFullYear()
   const month = String(date.getUTCMonth() + 1).padStart(2, '0')
   return `${year}-${month}`
@@ -62,8 +38,7 @@ function formatYearMonth(date: Date): string {
 
 /**
  * The "YYYY-MM" usage bucket for a user. Paid tiers anchor to the subscription's
- * current period start; FREE (or no subscription) uses the calendar month, which
- * is acceptable for the MVP per the guide.
+ * current period start; FREE uses the calendar month (acceptable for MVP).
  */
 export function getBillingPeriod(
   tier: SubscriptionTier,
@@ -78,12 +53,14 @@ export function getBillingPeriod(
 
 /**
  * Check whether a user may use a feature in the current billing period.
- * Does NOT mutate anything — call `incrementUsage` after the work succeeds.
+ * Read-only — call `incrementUsage` after the work succeeds. The increment is
+ * atomic (upsert), so concurrent requests cannot lose a count; the check→increment
+ * window can over-count by at most one, which is acceptable for the MVP.
  */
 export async function checkUsageLimit(userId: string, feature: Feature): Promise<UsageCheckResult> {
   const subscription = await getUserSubscription(userId)
   const tier = resolveEffectiveTier(subscription)
-  const limit = TIER_LIMITS[tier][feature]
+  const limit = getTierLimit(tier, feature)
 
   if (limit === Infinity) {
     return { allowed: true }
@@ -93,7 +70,7 @@ export async function checkUsageLimit(userId: string, feature: Feature): Promise
       allowed: false,
       remaining: 0,
       limit: 0,
-      reason: `${FEATURE_LABELS[feature]} is not available on your current plan.`,
+      reason: `${FEATURE_LABELS[feature]} are not available on your current plan.`,
     }
   }
 
@@ -110,14 +87,11 @@ export async function checkUsageLimit(userId: string, feature: Feature): Promise
     remaining: Math.max(0, limit - count),
     reason: allowed
       ? undefined
-      : `You've reached your ${FEATURE_LABELS[feature]} limit (${limit}/month) for this billing period.`,
+      : `You've used all ${limit} ${FEATURE_LABELS[feature].toLowerCase()} for this billing period.`,
   }
 }
 
-/**
- * Atomically record one use of a feature. Uses upsert + atomic increment so two
- * concurrent requests can't lose an update (race-safe).
- */
+/** Atomically record one use of a feature (upsert + increment — race-safe). */
 export async function incrementUsage(userId: string, feature: Feature): Promise<UsageRecord> {
   const subscription = await getUserSubscription(userId)
   const tier = resolveEffectiveTier(subscription)
@@ -148,4 +122,89 @@ export async function getMonthlyUsage(userId: string): Promise<Record<Feature, n
     usage[record.feature] = record.count
   }
   return usage
+}
+
+// ----- Aggregated stats (for meters / dashboard / /api/usage) ---------------
+
+export interface FeatureUsage {
+  feature: Feature
+  label: string
+  used: number
+  /** `Infinity` for unlimited. */
+  limit: number
+  /** `Infinity` for unlimited. */
+  remaining: number
+  unlimited: boolean
+  isAtLimit: boolean
+}
+
+export interface UsageStats {
+  tier: SubscriptionTier
+  billingPeriod: string
+  features: FeatureUsage[]
+}
+
+export async function getUsageStats(userId: string): Promise<UsageStats> {
+  const subscription = await getUserSubscription(userId)
+  const tier = resolveEffectiveTier(subscription)
+  const billingPeriod = getBillingPeriod(tier, subscription)
+
+  const records = await prisma.usageRecord.findMany({ where: { userId, billingPeriod } })
+  const counts: Record<Feature, number> = {
+    CV_OPTIMIZE: 0,
+    COVER_LETTER: 0,
+    ATS_CHECK: 0,
+    INTERVIEW: 0,
+  }
+  for (const record of records) counts[record.feature] = record.count
+
+  const features = ALL_FEATURES.map<FeatureUsage>((feature) => {
+    const limit = getTierLimit(tier, feature)
+    const used = counts[feature]
+    const unlimited = limit === Infinity
+    return {
+      feature,
+      label: FEATURE_LABELS[feature],
+      used,
+      limit,
+      remaining: unlimited ? Infinity : Math.max(0, limit - used),
+      unlimited,
+      isAtLimit: !unlimited && used >= limit,
+    }
+  })
+
+  return { tier, billingPeriod, features }
+}
+
+// JSON-safe DTO (Infinity is not serializable → null) for the API / client.
+export interface FeatureUsageDTO {
+  feature: Feature
+  label: string
+  used: number
+  limit: number | null
+  remaining: number | null
+  unlimited: boolean
+  isAtLimit: boolean
+}
+
+export interface UsageStatsDTO {
+  tier: SubscriptionTier
+  billingPeriod: string
+  features: FeatureUsageDTO[]
+}
+
+export function serializeUsageStats(stats: UsageStats): UsageStatsDTO {
+  return {
+    tier: stats.tier,
+    billingPeriod: stats.billingPeriod,
+    features: stats.features.map((f) => ({
+      feature: f.feature,
+      label: f.label,
+      used: f.used,
+      limit: f.unlimited ? null : f.limit,
+      remaining: f.unlimited ? null : f.remaining,
+      unlimited: f.unlimited,
+      isAtLimit: f.isAtLimit,
+    })),
+  }
 }

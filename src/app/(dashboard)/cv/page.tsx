@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { FileText } from 'lucide-react'
 import type { DocumentStatus } from '@prisma/client'
 
@@ -59,18 +60,20 @@ export default async function CvPage() {
               {documents.map((doc) => {
                 const meta = STATUS_META[doc.status]
                 return (
-                  <li
-                    key={doc.id}
-                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                  >
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                      <FileText className="size-4 text-muted-foreground" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{doc.originalFileName}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(doc.createdAt)}</p>
-                    </div>
-                    <Badge variant={meta.variant}>{meta.label}</Badge>
+                  <li key={doc.id}>
+                    <Link
+                      href={`/cv/${doc.id}`}
+                      className="-mx-2 flex items-center gap-3 rounded-md px-2 py-3 transition-colors hover:bg-accent"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <FileText className="size-4 text-muted-foreground" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{doc.originalFileName}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(doc.createdAt)}</p>
+                      </div>
+                      <Badge variant={meta.variant}>{meta.label}</Badge>
+                    </Link>
                   </li>
                 )
               })}

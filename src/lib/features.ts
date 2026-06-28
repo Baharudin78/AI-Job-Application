@@ -5,9 +5,9 @@
  * Keep this as the single source of truth for "what is live".
  */
 export const FEATURES = {
-  CV_OPTIMIZER: false,
-  COVER_LETTER: false,
-  ATS_CHECKER: false,
+  CV_OPTIMIZER: true,
+  COVER_LETTER: true,
+  ATS_CHECKER: true,
   INTERVIEW_PRACTICE: false,
 } as const
 
