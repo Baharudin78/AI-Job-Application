@@ -47,13 +47,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Welcome back{firstName ? `, ${firstName}` : ''}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Here&apos;s what&apos;s happening with your applications.
-        </p>
+      <div className="bg-brand-gradient relative overflow-hidden rounded-xl p-6 text-white shadow-sm sm:p-8">
+        <div className="pointer-events-none absolute -right-8 -top-10 size-40 rounded-full bg-white/10" />
+        <div className="relative">
+          <h1 className="text-2xl font-bold tracking-tight">
+            Welcome back{firstName ? `, ${firstName}` : ''}
+          </h1>
+          <p className="mt-1 text-sm text-white/80">
+            Here&apos;s what&apos;s happening with your applications.
+          </p>
+        </div>
       </div>
 
       {tier === 'FREE' && (

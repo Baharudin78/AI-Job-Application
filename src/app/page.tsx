@@ -97,9 +97,9 @@ export default function Home() {
       <main className="flex-1">
         {/* Hero */}
         <section className="relative overflow-hidden border-b">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-          <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 sm:py-28">
-            <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/[0.04] to-transparent" />
+          <div className="relative mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 sm:py-28">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
               <Globe className="size-3.5" />
               Built for non-native English speakers
             </span>
@@ -235,13 +235,13 @@ export default function Home() {
         </section>
 
         {/* Final CTA */}
-        <section className="border-t bg-muted/30">
-          <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6">
+        <section className="bg-brand-gradient">
+          <div className="mx-auto max-w-3xl px-4 py-20 text-center text-white sm:px-6">
             <h2 className="text-3xl font-bold tracking-tight">Your next job speaks English. Now so do you.</h2>
-            <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+            <p className="mx-auto mt-3 max-w-lg text-white/80">
               Join professionals across Southeast Asia, India and LATAM applying abroad with confidence.
             </p>
-            <Button asChild size="lg" className="mt-8">
+            <Button asChild size="lg" className="mt-8 bg-white text-primary hover:bg-white/90">
               <Link href="/signup">
                 Get started free
                 <ArrowRight className="size-4" />
