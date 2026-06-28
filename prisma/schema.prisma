@@ -52,13 +52,16 @@ enum Feature {
 
 /// Mirrors a Supabase auth.users row. `id` is supplied by Supabase, not generated here.
 model User {
-  id        String   @id @db.Uuid
-  email     String   @unique
-  name      String?
-  avatarUrl String?
-  language  String   @default("en")
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  id                    String    @id @db.Uuid
+  email                 String    @unique
+  name                  String?
+  avatarUrl             String?
+  language              String    @default("en")
+  targetJobTitle        String?
+  targetIndustry        String?
+  onboardingCompletedAt DateTime? @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
 
   subscription Subscription?
   cvDocuments  CvDocument[]

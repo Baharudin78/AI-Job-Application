@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+
 import { requireAuth } from '@/lib/auth/server'
 import { getUserSubscription } from '@/lib/db/subscription'
 import { resolveEffectiveTier } from '@/lib/db/usage'
@@ -10,6 +12,8 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   const user = await requireAuth()
+  // New users must finish onboarding before reaching the dashboard.
+  if (!user.onboardingCompletedAt) redirect('/onboarding')
   const subscription = await getUserSubscription(user.id)
   const tier = resolveEffectiveTier(subscription)
 

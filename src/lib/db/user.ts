@@ -63,3 +63,11 @@ export async function ensureUserProvisioned(input: CreateUserInput): Promise<Use
 
   return user
 }
+
+export async function isOnboardingComplete(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { onboardingCompletedAt: true },
+  })
+  return Boolean(user?.onboardingCompletedAt)
+}

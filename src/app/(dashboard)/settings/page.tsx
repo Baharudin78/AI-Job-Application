@@ -6,6 +6,7 @@ import { resolveEffectiveTier } from '@/lib/db/usage'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ProfileForm } from './profile-form'
 
 export default async function SettingsPage() {
   const user = await requireAuth()
@@ -20,36 +21,29 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Profile</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <Row label="Name">{user.name ?? '—'}</Row>
-          <Row label="Email">{user.email}</Row>
-          <Row label="Language">{user.language.toUpperCase()}</Row>
-          <Row label="Plan">
-            <Badge variant={tier === 'FREE' ? 'secondary' : 'default'}>{tier}</Badge>
-          </Row>
+        <CardContent>
+          <ProfileForm
+            email={user.email}
+            initialName={user.name ?? ''}
+            initialLanguage={user.language}
+          />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Billing</CardTitle>
+          <CardTitle className="text-base">Plan</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">Manage your plan and payment details.</p>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Current plan</span>
+            <Badge variant={tier === 'FREE' ? 'secondary' : 'default'}>{tier}</Badge>
+          </div>
           <Button asChild variant="outline">
             <Link href="/settings/billing">View plans</Link>
           </Button>
         </CardContent>
       </Card>
-    </div>
-  )
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b pb-2 last:border-0 last:pb-0">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{children}</span>
     </div>
   )
 }
